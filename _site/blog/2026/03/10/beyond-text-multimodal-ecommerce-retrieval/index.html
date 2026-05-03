@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Beyond Text: How We Built Multimodal Retrieval for E-Commerce Search | Guangyue Xu's Blog</title>
+  <link rel="stylesheet" href="/stylesheet.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #333; }
+    nav.site-nav {
+      width: 100%; max-width: 800px; margin: 0 auto;
+      padding: 12px 20px; border-bottom: 1px solid #eee;
+      display: flex; gap: 24px; font-size: 15px;
+    }
+    nav.site-nav a { color: #333; text-decoration: none; font-weight: 500; }
+    nav.site-nav a:hover, nav.site-nav a.active { color: #0070c0; }
+    .post-container { max-width: 800px; margin: 0 auto; padding: 30px 20px; }
+    .post-header h1 { font-size: 1.8em; margin-bottom: 6px; }
+    .post-meta { color: #888; font-size: 0.9em; margin-bottom: 16px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .post-content { line-height: 1.8; font-size: 1.02em; }
+    .post-content h2 { margin-top: 2em; border-bottom: 1px solid #eee; padding-bottom: 4px; }
+    .post-content h3 { margin-top: 1.5em; }
+    .post-content pre { background: #f6f8fa; padding: 14px; border-radius: 6px; overflow-x: auto; }
+    .post-content code { font-size: 0.9em; }
+    .post-content blockquote { border-left: 4px solid #0070c0; margin: 0 0 1em 0; padding: 8px 16px; background: #f0f7ff; }
+    .post-content table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    .post-content th, .post-content td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+    .post-content th { background: #f6f8fa; font-weight: 600; }
+    .back-link { display: inline-block; margin-top: 40px; color: #0070c0; text-decoration: none; font-size: 0.9em; }
+    .back-link:hover { text-decoration: underline; }
+    .tag-badge {
+      display: inline-block; background: #e8f0fe; color: #1a73e8;
+      border-radius: 12px; padding: 2px 10px; font-size: 0.8em;
+    }
+    /* ── 语言切换按钮 ── */
+    .lang-switcher {
+      display: flex; gap: 6px; margin-bottom: 24px;
+    }
+    .lang-btn {
+      padding: 4px 14px; border-radius: 16px; border: 1px solid #ccc;
+      background: #fff; color: #555; font-size: 0.85em; cursor: pointer;
+      transition: all 0.15s;
+    }
+    .lang-btn.active {
+      background: #0070c0; color: #fff; border-color: #0070c0;
+    }
+    /* 语言内容块：默认隐藏英文，显示中文 */
+    .lang-block { display: none; }
+    .lang-block.visible { display: block; }
+  </style>
+  <!-- KaTeX for math rendering -->
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body, {
+      delimiters: [
+        {left: '$$', right: '$$', display: true},
+        {left: '$', right: '$', display: false}
+      ]
+    });"></script>
+</head>
+<body>
+  <nav class="site-nav">
+    <a href="/">About</a>
+    <a href="/blog/" class="active">Blog</a>
+  </nav>
+  <div class="post-container">
+    <div class="post-header">
+      <h1>Beyond Text: How We Built Multimodal Retrieval for E-Commerce Search</h1>
+      <div class="post-meta">
+        <span>2026-03-10</span>
+        
+          
+        
+      </div>
+    </div>
+
+    
+    <!-- 双语切换按钮，仅当 front matter 含 bilingual: true 时显示 -->
+    <div class="lang-switcher">
+      <button class="lang-btn active" onclick="switchLang('zh', this)">中文</button>
+      <button class="lang-btn"        onclick="switchLang('en', this)">English</button>
+    </div>
+    
+
+    <div class="post-content">
+      <div class="lang-block" data-lang="en">
+
+  <h2 id="why-text-alone-is-not-enough">Why Text Alone Is Not Enough</h2>
+
+  <p>When you search for “red floral summer dress” on an e-commerce platform, what should the retrieval system do? The obvious answer is: find products whose text descriptions match your query. But here’s the problem — a significant fraction of products have sparse, low-quality, or even misleading text descriptions. The image, however, rarely lies.</p>
+
+  <p>This is the core motivation behind our paper <a href="https://arxiv.org/abs/2603.04836"><strong>Beyond Text: Aligning Vision and Language for Multimodal E-Commerce Retrieval</strong></a> (arXiv:2603.04836).</p>
+
+  <hr />
+
+  <h2 id="the-industrial-reality">The Industrial Reality</h2>
+
+  <p>Most production retrieval systems in e-commerce are <strong>text-only two-tower models</strong>:</p>
+
+  <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Query encoder  →  query embedding
+Product encoder →  product text embedding
+Similarity = dot_product(query_emb, product_emb)
+</code></pre></div>  </div>
+
+  <p>This works well when product text is rich and accurate. But in practice:</p>
+
+  <ul>
+    <li><strong>Short titles</strong>: “Dress Women Summer” — no color, no pattern, no material</li>
+    <li><strong>Missing attributes</strong>: images show the product clearly, but the seller never wrote it down</li>
+    <li><strong>Multilingual noise</strong>: machine-translated descriptions with wrong keywords</li>
+  </ul>
+
+  <p>The image contains all of this information. A model that can <em>see</em> the product should outperform one that can only <em>read</em> about it.</p>
+
+  <hr />
+
+  <h2 id="our-approach-two-stage-alignment">Our Approach: Two-Stage Alignment</h2>
+
+  <p>The key insight is that naively concatenating image and text features doesn’t work well. You need <strong>staged alignment</strong>:</p>
+
+  <h3 id="stage-1-domain-specific-fine-tuning">Stage 1: Domain-Specific Fine-Tuning</h3>
+
+  <p>General vision-language models (CLIP, BLIP-2) are pre-trained on web data. E-commerce products look very different from web images — white backgrounds, multiple angles, zoomed-in details. We fine-tune the vision encoder on large-scale product image data before any fusion.</p>
+
+  <h3 id="stage-2-cross-modal-fusion">Stage 2: Cross-Modal Fusion</h3>
+
+  <p>After domain adaptation, we introduce a <strong>modality fusion network</strong> that:</p>
+
+  <ol>
+    <li>Takes the query text embedding $\mathbf{q}$</li>
+    <li>Takes the product text embedding $\mathbf{t}$ and image embedding $\mathbf{v}$</li>
+    <li>Computes cross-modal attention to capture complementary signals:</li>
+  </ol>
+
+\[\mathbf{p}_{fused} = \text{Attention}(\mathbf{t}, \mathbf{v}) \cdot \mathbf{W}_{fusion}\]
+
+  <p>The intuition: for a query like “red dress”, the image provides color and style signals that the text might miss. For a query like “machine washable”, the text is more reliable. The fusion network learns to weight these dynamically.</p>
+
+  <hr />
+
+  <h2 id="what-we-found">What We Found</h2>
+
+  <p>Experiments on large-scale e-commerce datasets show:</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Model</th>
+        <th>Recall@100</th>
+        <th>NDCG@10</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Text-only baseline</td>
+        <td>72.3</td>
+        <td>41.2</td>
+      </tr>
+      <tr>
+        <td>+ Image (naive concat)</td>
+        <td>73.1</td>
+        <td>41.8</td>
+      </tr>
+      <tr>
+        <td>+ Domain fine-tuning</td>
+        <td>75.6</td>
+        <td>43.5</td>
+      </tr>
+      <tr>
+        <td>+ Our fusion network</td>
+        <td><strong>77.4</strong></td>
+        <td><strong>45.1</strong></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>The gains are especially large for <strong>visually distinctive queries</strong> (color, pattern, style) and <strong>products with sparse text</strong>.</p>
+
+  <hr />
+
+  <h2 id="engineering-considerations">Engineering Considerations</h2>
+
+  <p>One challenge in production: <strong>latency</strong>. A two-tower model is fast because you pre-compute product embeddings offline. Adding an image encoder increases the embedding dimension and offline compute, but doesn’t hurt online latency — the query side remains text-only.</p>
+
+  <p>The product embedding is computed once and indexed. At query time:</p>
+
+  <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>query text → query encoder → query_emb
+ANN search over product_emb index → top-K candidates
+</code></pre></div>  </div>
+
+  <p>This means the multimodal enrichment is essentially <strong>free at serving time</strong>.</p>
+
+  <hr />
+
+  <h2 id="takeaways">Takeaways</h2>
+
+  <ol>
+    <li><strong>Domain-specific fine-tuning matters more than architecture</strong> — a fine-tuned ViT-B outperforms a generic ViT-L</li>
+    <li><strong>Two-stage alignment</strong> (domain adaptation → cross-modal fusion) is better than end-to-end training from scratch</li>
+    <li><strong>Multimodal retrieval is production-friendly</strong> — image encoding happens offline, no latency penalty</li>
+  </ol>
+
+  <p>The full paper is on arXiv: <a href="https://arxiv.org/abs/2603.04836">arXiv:2603.04836</a>.</p>
+
+</div>
+
+<div class="lang-block" data-lang="zh">
+
+  <h2 id="section">为什么文本不够用</h2>
+
+  <p>当你在电商平台搜索”红色碎花夏裙”时，检索系统应该做什么？直觉上的答案是：找到文字描述匹配的商品。但问题在于——相当一部分商品的文字描述稀疏、质量低，甚至有误导性。而图片，几乎不会说谎。</p>
+
+  <p>这就是我们论文 <a href="https://arxiv.org/abs/2603.04836"><strong>Beyond Text: Aligning Vision and Language for Multimodal E-Commerce Retrieval</strong></a> 的核心动机。</p>
+
+  <hr />
+
+  <h2 id="section-1">工业现实</h2>
+
+  <p>大多数电商生产环境的检索系统是<strong>纯文本双塔模型</strong>：</p>
+
+  <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Query encoder  →  query embedding
+Product encoder →  product text embedding
+相似度 = dot_product(query_emb, product_emb)
+</code></pre></div>  </div>
+
+  <p>当商品文本丰富准确时效果不错。但实际上：</p>
+
+  <ul>
+    <li><strong>标题过短</strong>：”连衣裙 女 夏季” — 没有颜色、花纹、材质</li>
+    <li><strong>属性缺失</strong>：图片清晰展示了商品，但卖家从未写进描述</li>
+    <li><strong>多语言噪声</strong>：机器翻译的描述关键词错误</li>
+  </ul>
+
+  <p>图片包含了所有这些信息。能”看到”商品的模型，应该优于只能”读到”商品的模型。</p>
+
+  <hr />
+
+  <h2 id="section-2">我们的方法：两阶段对齐</h2>
+
+  <p>核心洞察是：简单地拼接图文特征效果不好，需要<strong>分阶段对齐</strong>：</p>
+
+  <h3 id="section-3">第一阶段：领域特定微调</h3>
+
+  <p>通用视觉语言模型（CLIP、BLIP-2）在网络数据上预训练。电商商品图片与网络图片差异很大——白色背景、多角度、细节特写。我们在大规模商品图片数据上对视觉编码器进行微调，再做融合。</p>
+
+  <h3 id="section-4">第二阶段：跨模态融合</h3>
+
+  <p>领域适配后，引入<strong>模态融合网络</strong>：</p>
+
+  <ol>
+    <li>输入 query 文本 embedding $\mathbf{q}$</li>
+    <li>输入商品文本 embedding $\mathbf{t}$ 和图片 embedding $\mathbf{v}$</li>
+    <li>通过跨模态注意力捕获互补信号：</li>
+  </ol>
+
+\[\mathbf{p}_{fused} = \text{Attention}(\mathbf{t}, \mathbf{v}) \cdot \mathbf{W}_{fusion}\]
+
+  <p>直觉：对于”红色连衣裙”这样的 query，图片提供了文字可能缺失的颜色和款式信号；对于”可机洗”这样的 query，文字更可靠。融合网络学会动态权衡。</p>
+
+  <hr />
+
+  <h2 id="section-5">实验结果</h2>
+
+  <p>在大规模电商数据集上：</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>模型</th>
+        <th>Recall@100</th>
+        <th>NDCG@10</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>纯文本基线</td>
+        <td>72.3</td>
+        <td>41.2</td>
+      </tr>
+      <tr>
+        <td>+ 图片（简单拼接）</td>
+        <td>73.1</td>
+        <td>41.8</td>
+      </tr>
+      <tr>
+        <td>+ 领域微调</td>
+        <td>75.6</td>
+        <td>43.5</td>
+      </tr>
+      <tr>
+        <td>+ 我们的融合网络</td>
+        <td><strong>77.4</strong></td>
+        <td><strong>45.1</strong></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>对<strong>视觉特征明显的 query</strong>（颜色、花纹、风格）和<strong>文本稀疏的商品</strong>，提升尤为显著。</p>
+
+  <hr />
+
+  <h2 id="section-6">工程考量</h2>
+
+  <p>生产环境的挑战之一是<strong>延迟</strong>。双塔模型快的原因是商品 embedding 离线预计算。加入图片编码器增加了离线计算量，但不影响在线延迟——query 侧仍然是纯文本。</p>
+
+  <p>商品 embedding 一次计算后建索引，query 时：</p>
+
+  <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>query text → query encoder → query_emb
+ANN 检索 product_emb 索引 → top-K 候选
+</code></pre></div>  </div>
+
+  <p>多模态增强在<strong>服务时几乎零成本</strong>。</p>
+
+  <hr />
+
+  <h2 id="section-7">总结</h2>
+
+  <ol>
+    <li><strong>领域微调比架构更重要</strong> — 微调过的 ViT-B 优于通用 ViT-L</li>
+    <li><strong>两阶段对齐</strong>（领域适配 → 跨模态融合）优于端到端从头训练</li>
+    <li><strong>多模态检索对生产友好</strong> — 图片编码离线完成，无延迟代价</li>
+  </ol>
+
+  <p>完整论文：<a href="https://arxiv.org/abs/2603.04836">arXiv:2603.04836</a></p>
+
+</div>
+
+    </div>
+    <a class="back-link" href="/blog/">← Back to Blog</a>
+  </div>
+
+  <script>
+    // 初始化：如果页面有 .lang-block，默认显示 zh
+    document.addEventListener('DOMContentLoaded', function () {
+      var blocks = document.querySelectorAll('.lang-block');
+      if (blocks.length > 0) {
+        blocks.forEach(function (b) {
+          if (b.dataset.lang === 'zh') b.classList.add('visible');
+        });
+      }
+    });
+
+    function switchLang(lang, btn) {
+      // 切换内容块
+      document.querySelectorAll('.lang-block').forEach(function (b) {
+        b.classList.toggle('visible', b.dataset.lang === lang);
+      });
+      // 切换按钮高亮
+      document.querySelectorAll('.lang-btn').forEach(function (b) {
+        b.classList.remove('active');
+      });
+      btn.classList.add('active');
+      // 重新触发 KaTeX 渲染（切换后新内容变为可见）
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            {left: '$$', right: '$$', display: true},
+            {left: '$', right: '$', display: false}
+          ]
+        });
+      }
+    }
+  </script>
+</body>
+</html>

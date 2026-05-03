@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Multi-Channel Retrieval Fusion: From Heuristic Weights to Unified Ranking | Guangyue Xu's Blog</title>
+  <link rel="stylesheet" href="/stylesheet.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #333; }
+    nav.site-nav {
+      width: 100%; max-width: 800px; margin: 0 auto;
+      padding: 12px 20px; border-bottom: 1px solid #eee;
+      display: flex; gap: 24px; font-size: 15px;
+    }
+    nav.site-nav a { color: #333; text-decoration: none; font-weight: 500; }
+    nav.site-nav a:hover, nav.site-nav a.active { color: #0070c0; }
+    .post-container { max-width: 800px; margin: 0 auto; padding: 30px 20px; }
+    .post-header h1 { font-size: 1.8em; margin-bottom: 6px; }
+    .post-meta { color: #888; font-size: 0.9em; margin-bottom: 16px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .post-content { line-height: 1.8; font-size: 1.02em; }
+    .post-content h2 { margin-top: 2em; border-bottom: 1px solid #eee; padding-bottom: 4px; }
+    .post-content h3 { margin-top: 1.5em; }
+    .post-content pre { background: #f6f8fa; padding: 14px; border-radius: 6px; overflow-x: auto; }
+    .post-content code { font-size: 0.9em; }
+    .post-content blockquote { border-left: 4px solid #0070c0; margin: 0 0 1em 0; padding: 8px 16px; background: #f0f7ff; }
+    .post-content table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    .post-content th, .post-content td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+    .post-content th { background: #f6f8fa; font-weight: 600; }
+    .back-link { display: inline-block; margin-top: 40px; color: #0070c0; text-decoration: none; font-size: 0.9em; }
+    .back-link:hover { text-decoration: underline; }
+    .tag-badge {
+      display: inline-block; background: #e8f0fe; color: #1a73e8;
+      border-radius: 12px; padding: 2px 10px; font-size: 0.8em;
+    }
+    /* ── 语言切换按钮 ── */
+    .lang-switcher {
+      display: flex; gap: 6px; margin-bottom: 24px;
+    }
+    .lang-btn {
+      padding: 4px 14px; border-radius: 16px; border: 1px solid #ccc;
+      background: #fff; color: #555; font-size: 0.85em; cursor: pointer;
+      transition: all 0.15s;
+    }
+    .lang-btn.active {
+      background: #0070c0; color: #fff; border-color: #0070c0;
+    }
+    /* 语言内容块：默认隐藏英文，显示中文 */
+    .lang-block { display: none; }
+    .lang-block.visible { display: block; }
+  </style>
+  <!-- KaTeX for math rendering -->
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body, {
+      delimiters: [
+        {left: '$$', right: '$$', display: true},
+        {left: '$', right: '$', display: false}
+      ]
+    });"></script>
+</head>
+<body>
+  <nav class="site-nav">
+    <a href="/">About</a>
+    <a href="/blog/" class="active">Blog</a>
+  </nav>
+  <div class="post-container">
+    <div class="post-header">
+      <h1>Multi-Channel Retrieval Fusion: From Heuristic Weights to Unified Ranking</h1>
+      <div class="post-meta">
+        <span>2025-05-02</span>
+        
+          
+            <span class="tag-badge">Search</span>
+          
+            <span class="tag-badge">Learning-to-Rank</span>
+          
+            <span class="tag-badge">E-Commerce</span>
+          
+            <span class="tag-badge">Recommendation</span>
+          
+        
+      </div>
+    </div>
+
+    
+    <!-- 双语切换按钮，仅当 front matter 含 bilingual: true 时显示 -->
+    <div class="lang-switcher">
+      <button class="lang-btn active" onclick="switchLang('zh', this)">中文</button>
+      <button class="lang-btn"        onclick="switchLang('en', this)">English</button>
+    </div>
+    
+
+    <div class="post-content">
+      <div class="lang-block" data-lang="zh">
+
+  <blockquote>
+    <p>本文是对论文 <a href="https://arxiv.org/abs/2602.23530">Unified Learning-to-Rank for Multi-Channel Retrieval in Large-Scale E-Commerce Search</a>（arXiv 2602.23530）的解读。该论文来自 Target.com 搜索团队，已部署于生产环境，在线 A/B 实验中用户转化率提升 <strong>+2.85%</strong>。</p>
+  </blockquote>
+
+  <hr />
+
+  <h2 id="section">背景：电商搜索为什么需要多通道检索？</h2>
+
+  <p>大规模电商搜索面临一个根本矛盾：商品库有数百万 SKU，但每次查询必须在极低延迟下返回结果。单一检索通道无法同时满足所有需求——</p>
+
+  <ul>
+    <li><strong>词法匹配通道</strong>（BM25 类）：精确匹配关键词，但召回率有限</li>
+    <li><strong>语义检索通道</strong>（向量检索）：理解语义，但可能漏掉精确匹配</li>
+    <li><strong>热销/新品/季节性通道</strong>：满足业务目标，但与相关性无直接关联</li>
+  </ul>
+
+  <p>因此，现代电商搜索系统普遍采用<strong>多通道检索</strong>：每个通道独立召回 top-$n_k$ 个候选，最终合并成一个候选池，再交给排序模型处理。</p>
+
+\[\mathcal{R}(q) = \bigcup_{k=1}^{K} \mathcal{R}_k^{(n_k)}(q)\]
+
+  <p><strong>问题来了：如何把来自不同通道、分布完全不同的候选合并成一个最优排序？</strong></p>
+
+  <hr />
+
+  <h2 id="section-1">现有方法的局限</h2>
+
+  <h3 id="reciprocal-rank-fusionrrf">Reciprocal Rank Fusion（RRF）</h3>
+
+  <p>RRF 是最常见的无监督融合方法，每个候选的得分由其在各通道中的排名倒数求和：</p>
+
+\[\text{score}_\text{RRF}(i) = \sum_{k=1}^{K} \frac{1}{r_k(i) + c}\]
+
+  <p>其中 $r_k(i)$ 是候选 $i$ 在通道 $k$ 中的排名，$c$ 是平滑常数（通常取 60）。</p>
+
+  <p><strong>缺陷</strong>：权重固定，不感知 query。同一个通道对不同 query 的贡献差异极大，但 RRF 无法区分。</p>
+
+  <h3 id="weighted-interleavingwi">Weighted Interleaving（WI）</h3>
+
+  <p>WI 按预设的通道权重概率性地交叉采样各通道的结果。比 RRF 灵活一点，但权重仍然是全局固定的，无法根据 query 动态调整，也无法建模通道间的交互。</p>
+
+  <p><strong>核心问题</strong>：这两种方法都把通道当作独立的黑盒，忽略了：</p>
+  <ol>
+    <li>不同 query 对不同通道的依赖程度不同</li>
+    <li>通道之间存在候选重叠和互补关系</li>
+    <li>业务目标（转化率）与排名位置之间的复杂关系</li>
+  </ol>
+
+  <hr />
+
+  <h2 id="unified-ranking">论文方案：统一排序模型（Unified Ranking）</h2>
+
+  <h3 id="section-2">核心思路</h3>
+
+  <p>把多通道融合重新定义为一个<strong>有监督的 Learning-to-Rank 问题</strong>：</p>
+
+  <blockquote>
+    <p>不再给通道分配固定权重，而是把通道信息作为特征，训练一个统一的排序函数 $f(q, i; \theta)$，直接优化业务目标。</p>
+  </blockquote>
+
+  <p>模型选择 <strong>GBDT（梯度提升决策树）</strong>，原因是：在有大量结构化特征的工业场景下，GBDT 在延迟和效果上仍然与深度模型持平甚至更优，且推理速度快，满足 p95 &lt; 50ms 的生产要求。</p>
+
+  <hr />
+
+  <h2 id="section-3">三个关键设计</h2>
+
+  <h3 id="queryitemweek-">1. 数据表示：query–item–week 三元组</h3>
+
+  <p>训练样本以<strong>周</strong>为粒度聚合，而不是单次 session。周级聚合平衡了时效性与统计稳定性，同时能捕捉季节性和趋势变化。模型同时使用长期（历史销量）和短期（近期点击速度）特征，平衡稳定商品和新兴趋势商品。</p>
+
+  <h3 id="section-4">2. 标签构造：转化加权的参与度标签</h3>
+
+  <p>用户行为存在一个转化漏斗：曝光 → 点击 → 加购 → 购买。论文定义了一个加权标签：</p>
+
+\[L(q, i, w) = a \cdot P_{q,i,w} + b \cdot A_{q,i,w} + c \cdot C_{q,i,w}\]
+
+  <p>权重按语料库级别的转化率自动校准：</p>
+
+\[a = 1, \quad b = \frac{|\mathcal{P}|}{|\mathcal{A}|}, \quad c = \frac{|\mathcal{P}|}{|\mathcal{C}|}\]
+
+  <p><strong>购买的权重最高，点击的权重最低</strong>，直接对齐业务目标。最后做 per-query max 归一化，把标签映射到 $[0, 4]$。</p>
+
+  <h3 id="section-5">3. 特征工程：三类特征</h3>
+
+  <table>
+    <thead>
+      <tr>
+        <th>特征类别</th>
+        <th>内容</th>
+        <th>作用</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>商品特征</strong></td>
+        <td>价格、类目、多时间窗口销量</td>
+        <td>建模商品长期受欢迎程度</td>
+      </tr>
+      <tr>
+        <td><strong>通道感知的 query-item 特征</strong></td>
+        <td>每个通道的检索得分</td>
+        <td>让模型学习 query 对各通道的依赖</td>
+      </tr>
+      <tr>
+        <td><strong>用户参与度特征</strong></td>
+        <td>点击、加购、购买的短期加权聚合</td>
+        <td>捕捉短期用户意图变化</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p><strong>通道感知特征</strong>是核心创新：把所有通道的检索得分都作为特征输入，让模型自己学习在不同 query 下应该信任哪个通道。</p>
+
+  <hr />
+
+  <h2 id="section-6">实验结果</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th>模型变体</th>
+        <th>NDCG@8</th>
+        <th>CTR 提升</th>
+        <th>加购提升</th>
+        <th>转化提升</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>WI（基线）</td>
+        <td>0.6620</td>
+        <td>—</td>
+        <td>—</td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td>UR</td>
+        <td>0.7169</td>
+        <td>+0.26%</td>
+        <td>+1.21%*</td>
+        <td>+1.28%*</td>
+      </tr>
+      <tr>
+        <td>UR + 参与度特征</td>
+        <td>0.7799</td>
+        <td>+1.52%*</td>
+        <td>+2.72%*</td>
+        <td>+2.38%*</td>
+      </tr>
+      <tr>
+        <td>UR + 参与度特征 + 转化标签</td>
+        <td>0.7994</td>
+        <td>+1.46%*</td>
+        <td>+2.81%*</td>
+        <td><strong>+2.85%</strong>*</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>*表示 95% 置信水平下统计显著。</p>
+
+  <p>三个关键结论：</p>
+  <ol>
+    <li><strong>统一排序 vs. 加权交叉</strong>：仅把融合问题换成有监督 LTR，转化率就提升 +1.28%，说明通道间交互信息有价值</li>
+    <li><strong>参与度特征贡献最大</strong>：短期用户行为信号比商品长期历史销量更能预测当前搜索的转化意图</li>
+    <li><strong>转化加权标签</strong>：让模型更关注购买行为而不是点击行为，进一步提升 +0.47%</li>
+  </ol>
+
+  <hr />
+
+  <h2 id="section-7">总结</h2>
+
+  <p>这篇论文的核心贡献：<strong>把多通道融合从”给通道分配固定权重”变成”让模型学习 query 对通道的依赖”</strong>。技术上没有特别复杂的创新，但正确的问题定义 + 正确的特征工程，在真实生产环境中取得了显著的业务提升。</p>
+
+  <blockquote>
+    <p><strong>论文链接</strong>：<a href="https://arxiv.org/abs/2602.23530">arXiv:2602.23530</a></p>
+  </blockquote>
+
+</div>
+
+<div class="lang-block" data-lang="en">
+
+  <blockquote>
+    <p>This post is a reading note on <a href="https://arxiv.org/abs/2602.23530">Unified Learning-to-Rank for Multi-Channel Retrieval in Large-Scale E-Commerce Search</a> (arXiv 2602.23530), from the Target.com search team. The system is deployed in production and achieved a <strong>+2.85% improvement in user conversion</strong> in online A/B experiments.</p>
+  </blockquote>
+
+  <hr />
+
+  <h2 id="background-why-multi-channel-retrieval">Background: Why Multi-Channel Retrieval?</h2>
+
+  <p>Large-scale e-commerce search faces a fundamental tension: the catalog contains millions of SKUs, yet every query must return results under strict latency budgets. No single retrieval channel can satisfy all needs simultaneously:</p>
+
+  <ul>
+    <li><strong>Lexical matching</strong> (BM25-style): precise keyword matching, but limited recall</li>
+    <li><strong>Semantic retrieval</strong> (dense vectors): understands intent, but may miss exact matches</li>
+    <li><strong>Popularity / freshness / seasonal channels</strong>: serve business objectives, but not directly tied to relevance</li>
+  </ul>
+
+  <p>Modern systems therefore use <strong>multi-channel retrieval</strong>: each channel independently retrieves its top-$n_k$ candidates, which are merged into a single candidate pool for re-ranking:</p>
+
+\[\mathcal{R}(q) = \bigcup_{k=1}^{K} \mathcal{R}_k^{(n_k)}(q)\]
+
+  <p><strong>The challenge: how do you merge candidates from heterogeneous channels with completely different score distributions into a single optimal ranking?</strong></p>
+
+  <hr />
+
+  <h2 id="limitations-of-existing-methods">Limitations of Existing Methods</h2>
+
+  <h3 id="reciprocal-rank-fusion-rrf">Reciprocal Rank Fusion (RRF)</h3>
+
+  <p>RRF is the most common unsupervised fusion method. Each candidate’s score is the sum of reciprocal ranks across channels:</p>
+
+\[\text{score}_\text{RRF}(i) = \sum_{k=1}^{K} \frac{1}{r_k(i) + c}\]
+
+  <p><strong>Limitation</strong>: fixed global weights, query-agnostic. The same channel may be highly relevant for some queries and irrelevant for others — RRF cannot distinguish.</p>
+
+  <h3 id="weighted-interleaving-wi">Weighted Interleaving (WI)</h3>
+
+  <p>WI probabilistically samples from channels according to predefined weights. Slightly more flexible than RRF, but weights are still globally fixed and cannot model cross-channel interactions.</p>
+
+  <p><strong>Core problem</strong>: both methods treat channels as independent black boxes, ignoring:</p>
+  <ol>
+    <li>Different queries depend on different channels to different degrees</li>
+    <li>Candidates overlap and complement each other across channels</li>
+    <li>The complex relationship between ranking position and business KPIs like conversion</li>
+  </ol>
+
+  <hr />
+
+  <h2 id="proposed-approach-unified-ranking-model">Proposed Approach: Unified Ranking Model</h2>
+
+  <h3 id="core-idea">Core Idea</h3>
+
+  <p>Reformulate multi-channel fusion as a <strong>supervised learning-to-rank problem</strong>:</p>
+
+  <blockquote>
+    <p>Instead of assigning fixed weights to channels, treat channel information as features and train a unified scoring function $f(q, i; \theta)$ that directly optimizes business objectives.</p>
+  </blockquote>
+
+  <p>The model uses <strong>GBDT (Gradient Boosted Decision Trees)</strong> because in industrial settings with large structured feature sets, GBDT remains competitive with deep neural models under realistic latency constraints, and its inference speed satisfies the p95 &lt; 50ms production requirement.</p>
+
+  <hr />
+
+  <h2 id="three-key-design-choices">Three Key Design Choices</h2>
+
+  <h3 id="data-representation-queryitemweek-triples">1. Data Representation: Query–Item–Week Triples</h3>
+
+  <p>Training instances are aggregated at <strong>weekly granularity</strong> rather than per-session. Weekly aggregation balances temporal responsiveness and statistical stability, and captures seasonality and trend shifts. The model uses both long-term (historical sales) and short-term (recent click velocity) features to balance established products with newly trending items.</p>
+
+  <h3 id="label-construction-conversion-weighted-engagement-label">2. Label Construction: Conversion-Weighted Engagement Label</h3>
+
+  <p>User behavior follows a conversion funnel: impression → click → add-to-cart → purchase. The paper defines a weighted label:</p>
+
+\[L(q, i, w) = a \cdot P_{q,i,w} + b \cdot A_{q,i,w} + c \cdot C_{q,i,w}\]
+
+  <p>Weights are calibrated using corpus-level conversion statistics:</p>
+
+\[a = 1, \quad b = \frac{|\mathcal{P}|}{|\mathcal{A}|}, \quad c = \frac{|\mathcal{P}|}{|\mathcal{C}|}\]
+
+  <p><strong>Purchases receive the highest weight, clicks the lowest</strong>, directly aligning training with business objectives. Labels are then per-query max-normalized to $[0, 4]$.</p>
+
+  <h3 id="feature-engineering-three-feature-groups">3. Feature Engineering: Three Feature Groups</h3>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Feature Group</th>
+        <th>Content</th>
+        <th>Purpose</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Item features</strong></td>
+        <td>Price, category, multi-window sales</td>
+        <td>Model long-term item popularity</td>
+      </tr>
+      <tr>
+        <td><strong>Channel-aware query–item features</strong></td>
+        <td>Retrieval scores from all channels</td>
+        <td>Learn query-dependent channel utility</td>
+      </tr>
+      <tr>
+        <td><strong>User engagement features</strong></td>
+        <td>Short-term weighted clicks/ATC/purchases</td>
+        <td>Capture short-term intent shifts</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p><strong>Channel-aware features</strong> are the core innovation: all channel retrieval scores are fed as features, letting the model learn which channel to trust for each query. Missing channel scores are treated as NA — GBDT handles sparse features natively.</p>
+
+  <hr />
+
+  <h2 id="results">Results</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Model Variant</th>
+        <th>NDCG@8</th>
+        <th>CTR Lift</th>
+        <th>ATC Lift</th>
+        <th>Conversion Lift</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>WI (Baseline)</td>
+        <td>0.6620</td>
+        <td>—</td>
+        <td>—</td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td>UR</td>
+        <td>0.7169</td>
+        <td>+0.26%</td>
+        <td>+1.21%*</td>
+        <td>+1.28%*</td>
+      </tr>
+      <tr>
+        <td>UR + Engagement Features</td>
+        <td>0.7799</td>
+        <td>+1.52%*</td>
+        <td>+2.72%*</td>
+        <td>+2.38%*</td>
+      </tr>
+      <tr>
+        <td>UR + EF + Conversion Label</td>
+        <td>0.7994</td>
+        <td>+1.46%*</td>
+        <td>+2.81%*</td>
+        <td><strong>+2.85%</strong>*</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>*Statistically significant at 95% confidence level.</p>
+
+  <p>Three key takeaways:</p>
+  <ol>
+    <li><strong>Unified ranking vs. weighted interleaving</strong>: simply replacing heuristic fusion with supervised LTR yields +1.28% conversion, confirming that cross-channel interaction signals are valuable</li>
+    <li><strong>Engagement features have the largest impact</strong>: short-term user behavior signals are more predictive of current-session conversion intent than long-term item history</li>
+    <li><strong>Conversion-weighted labels</strong>: orienting the model toward purchase behavior rather than clicks adds a further +0.47% conversion lift</li>
+  </ol>
+
+  <hr />
+
+  <h2 id="takeaways">Takeaways</h2>
+
+  <p>The core contribution of this paper: <strong>shifting multi-channel fusion from “assign fixed weights to channels” to “let the model learn query-dependent channel utility”</strong>. There is no particularly novel algorithm — the value lies in the correct problem formulation and the right feature engineering, which together produce significant business impact in a real production environment.</p>
+
+  <blockquote>
+    <p><strong>Paper link</strong>: <a href="https://arxiv.org/abs/2602.23530">arXiv:2602.23530</a></p>
+  </blockquote>
+
+</div>
+
+    </div>
+    <a class="back-link" href="/blog/">← Back to Blog</a>
+  </div>
+
+  <script>
+    // 初始化：如果页面有 .lang-block，默认显示 zh
+    document.addEventListener('DOMContentLoaded', function () {
+      var blocks = document.querySelectorAll('.lang-block');
+      if (blocks.length > 0) {
+        blocks.forEach(function (b) {
+          if (b.dataset.lang === 'zh') b.classList.add('visible');
+        });
+      }
+    });
+
+    function switchLang(lang, btn) {
+      // 切换内容块
+      document.querySelectorAll('.lang-block').forEach(function (b) {
+        b.classList.toggle('visible', b.dataset.lang === lang);
+      });
+      // 切换按钮高亮
+      document.querySelectorAll('.lang-btn').forEach(function (b) {
+        b.classList.remove('active');
+      });
+      btn.classList.add('active');
+      // 重新触发 KaTeX 渲染（切换后新内容变为可见）
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            {left: '$$', right: '$$', display: true},
+            {left: '$', right: '$', display: false}
+          ]
+        });
+      }
+    }
+  </script>
+</body>
+</html>

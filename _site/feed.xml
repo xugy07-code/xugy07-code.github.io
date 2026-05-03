@@ -1,0 +1,599 @@
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" xml:lang="zh-CN"><generator uri="https://jekyllrb.com/" version="4.4.1">Jekyll</generator><link href="http://localhost:4001/feed.xml" rel="self" type="application/atom+xml" /><link href="http://localhost:4001/" rel="alternate" type="text/html" hreflang="zh-CN" /><updated>2026-05-02T23:51:29-05:00</updated><id>http://localhost:4001/feed.xml</id><title type="html">Guangyue Xu’s Blog</title><subtitle>Personal blog on machine learning, NLP, and tech.</subtitle><author><name>Guangyue Xu</name></author><entry><title type="html">Beyond Text: How We Built Multimodal Retrieval for E-Commerce Search</title><link href="http://localhost:4001/blog/2026/03/10/beyond-text-multimodal-ecommerce-retrieval/" rel="alternate" type="text/html" title="Beyond Text: How We Built Multimodal Retrieval for E-Commerce Search" /><published>2026-03-10T00:00:00-05:00</published><updated>2026-03-10T00:00:00-05:00</updated><id>http://localhost:4001/blog/2026/03/10/beyond-text-multimodal-ecommerce-retrieval</id><content type="html" xml:base="http://localhost:4001/blog/2026/03/10/beyond-text-multimodal-ecommerce-retrieval/"><![CDATA[<div class="lang-block" data-lang="en">
+
+  <h2 id="why-text-alone-is-not-enough">Why Text Alone Is Not Enough</h2>
+
+  <p>When you search for “red floral summer dress” on an e-commerce platform, what should the retrieval system do? The obvious answer is: find products whose text descriptions match your query. But here’s the problem — a significant fraction of products have sparse, low-quality, or even misleading text descriptions. The image, however, rarely lies.</p>
+
+  <p>This is the core motivation behind our paper <a href="https://arxiv.org/abs/2603.04836"><strong>Beyond Text: Aligning Vision and Language for Multimodal E-Commerce Retrieval</strong></a> (arXiv:2603.04836).</p>
+
+  <hr />
+
+  <h2 id="the-industrial-reality">The Industrial Reality</h2>
+
+  <p>Most production retrieval systems in e-commerce are <strong>text-only two-tower models</strong>:</p>
+
+  <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Query encoder  →  query embedding
+Product encoder →  product text embedding
+Similarity = dot_product(query_emb, product_emb)
+</code></pre></div>  </div>
+
+  <p>This works well when product text is rich and accurate. But in practice:</p>
+
+  <ul>
+    <li><strong>Short titles</strong>: “Dress Women Summer” — no color, no pattern, no material</li>
+    <li><strong>Missing attributes</strong>: images show the product clearly, but the seller never wrote it down</li>
+    <li><strong>Multilingual noise</strong>: machine-translated descriptions with wrong keywords</li>
+  </ul>
+
+  <p>The image contains all of this information. A model that can <em>see</em> the product should outperform one that can only <em>read</em> about it.</p>
+
+  <hr />
+
+  <h2 id="our-approach-two-stage-alignment">Our Approach: Two-Stage Alignment</h2>
+
+  <p>The key insight is that naively concatenating image and text features doesn’t work well. You need <strong>staged alignment</strong>:</p>
+
+  <h3 id="stage-1-domain-specific-fine-tuning">Stage 1: Domain-Specific Fine-Tuning</h3>
+
+  <p>General vision-language models (CLIP, BLIP-2) are pre-trained on web data. E-commerce products look very different from web images — white backgrounds, multiple angles, zoomed-in details. We fine-tune the vision encoder on large-scale product image data before any fusion.</p>
+
+  <h3 id="stage-2-cross-modal-fusion">Stage 2: Cross-Modal Fusion</h3>
+
+  <p>After domain adaptation, we introduce a <strong>modality fusion network</strong> that:</p>
+
+  <ol>
+    <li>Takes the query text embedding $\mathbf{q}$</li>
+    <li>Takes the product text embedding $\mathbf{t}$ and image embedding $\mathbf{v}$</li>
+    <li>Computes cross-modal attention to capture complementary signals:</li>
+  </ol>
+
+\[\mathbf{p}_{fused} = \text{Attention}(\mathbf{t}, \mathbf{v}) \cdot \mathbf{W}_{fusion}\]
+
+  <p>The intuition: for a query like “red dress”, the image provides color and style signals that the text might miss. For a query like “machine washable”, the text is more reliable. The fusion network learns to weight these dynamically.</p>
+
+  <hr />
+
+  <h2 id="what-we-found">What We Found</h2>
+
+  <p>Experiments on large-scale e-commerce datasets show:</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Model</th>
+        <th>Recall@100</th>
+        <th>NDCG@10</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Text-only baseline</td>
+        <td>72.3</td>
+        <td>41.2</td>
+      </tr>
+      <tr>
+        <td>+ Image (naive concat)</td>
+        <td>73.1</td>
+        <td>41.8</td>
+      </tr>
+      <tr>
+        <td>+ Domain fine-tuning</td>
+        <td>75.6</td>
+        <td>43.5</td>
+      </tr>
+      <tr>
+        <td>+ Our fusion network</td>
+        <td><strong>77.4</strong></td>
+        <td><strong>45.1</strong></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>The gains are especially large for <strong>visually distinctive queries</strong> (color, pattern, style) and <strong>products with sparse text</strong>.</p>
+
+  <hr />
+
+  <h2 id="engineering-considerations">Engineering Considerations</h2>
+
+  <p>One challenge in production: <strong>latency</strong>. A two-tower model is fast because you pre-compute product embeddings offline. Adding an image encoder increases the embedding dimension and offline compute, but doesn’t hurt online latency — the query side remains text-only.</p>
+
+  <p>The product embedding is computed once and indexed. At query time:</p>
+
+  <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>query text → query encoder → query_emb
+ANN search over product_emb index → top-K candidates
+</code></pre></div>  </div>
+
+  <p>This means the multimodal enrichment is essentially <strong>free at serving time</strong>.</p>
+
+  <hr />
+
+  <h2 id="takeaways">Takeaways</h2>
+
+  <ol>
+    <li><strong>Domain-specific fine-tuning matters more than architecture</strong> — a fine-tuned ViT-B outperforms a generic ViT-L</li>
+    <li><strong>Two-stage alignment</strong> (domain adaptation → cross-modal fusion) is better than end-to-end training from scratch</li>
+    <li><strong>Multimodal retrieval is production-friendly</strong> — image encoding happens offline, no latency penalty</li>
+  </ol>
+
+  <p>The full paper is on arXiv: <a href="https://arxiv.org/abs/2603.04836">arXiv:2603.04836</a>.</p>
+
+</div>
+
+<div class="lang-block" data-lang="zh">
+
+  <h2 id="section">为什么文本不够用</h2>
+
+  <p>当你在电商平台搜索”红色碎花夏裙”时，检索系统应该做什么？直觉上的答案是：找到文字描述匹配的商品。但问题在于——相当一部分商品的文字描述稀疏、质量低，甚至有误导性。而图片，几乎不会说谎。</p>
+
+  <p>这就是我们论文 <a href="https://arxiv.org/abs/2603.04836"><strong>Beyond Text: Aligning Vision and Language for Multimodal E-Commerce Retrieval</strong></a> 的核心动机。</p>
+
+  <hr />
+
+  <h2 id="section-1">工业现实</h2>
+
+  <p>大多数电商生产环境的检索系统是<strong>纯文本双塔模型</strong>：</p>
+
+  <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Query encoder  →  query embedding
+Product encoder →  product text embedding
+相似度 = dot_product(query_emb, product_emb)
+</code></pre></div>  </div>
+
+  <p>当商品文本丰富准确时效果不错。但实际上：</p>
+
+  <ul>
+    <li><strong>标题过短</strong>：”连衣裙 女 夏季” — 没有颜色、花纹、材质</li>
+    <li><strong>属性缺失</strong>：图片清晰展示了商品，但卖家从未写进描述</li>
+    <li><strong>多语言噪声</strong>：机器翻译的描述关键词错误</li>
+  </ul>
+
+  <p>图片包含了所有这些信息。能”看到”商品的模型，应该优于只能”读到”商品的模型。</p>
+
+  <hr />
+
+  <h2 id="section-2">我们的方法：两阶段对齐</h2>
+
+  <p>核心洞察是：简单地拼接图文特征效果不好，需要<strong>分阶段对齐</strong>：</p>
+
+  <h3 id="section-3">第一阶段：领域特定微调</h3>
+
+  <p>通用视觉语言模型（CLIP、BLIP-2）在网络数据上预训练。电商商品图片与网络图片差异很大——白色背景、多角度、细节特写。我们在大规模商品图片数据上对视觉编码器进行微调，再做融合。</p>
+
+  <h3 id="section-4">第二阶段：跨模态融合</h3>
+
+  <p>领域适配后，引入<strong>模态融合网络</strong>：</p>
+
+  <ol>
+    <li>输入 query 文本 embedding $\mathbf{q}$</li>
+    <li>输入商品文本 embedding $\mathbf{t}$ 和图片 embedding $\mathbf{v}$</li>
+    <li>通过跨模态注意力捕获互补信号：</li>
+  </ol>
+
+\[\mathbf{p}_{fused} = \text{Attention}(\mathbf{t}, \mathbf{v}) \cdot \mathbf{W}_{fusion}\]
+
+  <p>直觉：对于”红色连衣裙”这样的 query，图片提供了文字可能缺失的颜色和款式信号；对于”可机洗”这样的 query，文字更可靠。融合网络学会动态权衡。</p>
+
+  <hr />
+
+  <h2 id="section-5">实验结果</h2>
+
+  <p>在大规模电商数据集上：</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>模型</th>
+        <th>Recall@100</th>
+        <th>NDCG@10</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>纯文本基线</td>
+        <td>72.3</td>
+        <td>41.2</td>
+      </tr>
+      <tr>
+        <td>+ 图片（简单拼接）</td>
+        <td>73.1</td>
+        <td>41.8</td>
+      </tr>
+      <tr>
+        <td>+ 领域微调</td>
+        <td>75.6</td>
+        <td>43.5</td>
+      </tr>
+      <tr>
+        <td>+ 我们的融合网络</td>
+        <td><strong>77.4</strong></td>
+        <td><strong>45.1</strong></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>对<strong>视觉特征明显的 query</strong>（颜色、花纹、风格）和<strong>文本稀疏的商品</strong>，提升尤为显著。</p>
+
+  <hr />
+
+  <h2 id="section-6">工程考量</h2>
+
+  <p>生产环境的挑战之一是<strong>延迟</strong>。双塔模型快的原因是商品 embedding 离线预计算。加入图片编码器增加了离线计算量，但不影响在线延迟——query 侧仍然是纯文本。</p>
+
+  <p>商品 embedding 一次计算后建索引，query 时：</p>
+
+  <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>query text → query encoder → query_emb
+ANN 检索 product_emb 索引 → top-K 候选
+</code></pre></div>  </div>
+
+  <p>多模态增强在<strong>服务时几乎零成本</strong>。</p>
+
+  <hr />
+
+  <h2 id="section-7">总结</h2>
+
+  <ol>
+    <li><strong>领域微调比架构更重要</strong> — 微调过的 ViT-B 优于通用 ViT-L</li>
+    <li><strong>两阶段对齐</strong>（领域适配 → 跨模态融合）优于端到端从头训练</li>
+    <li><strong>多模态检索对生产友好</strong> — 图片编码离线完成，无延迟代价</li>
+  </ol>
+
+  <p>完整论文：<a href="https://arxiv.org/abs/2603.04836">arXiv:2603.04836</a></p>
+
+</div>]]></content><author><name>Guangyue Xu</name></author><category term="research" /><category term="e-commerce" /><category term="multimodal" /><summary type="html"><![CDATA[Most e-commerce search systems rely purely on text — but product images carry signals that text often misses. We propose a two-stage vision-language alignment framework for retrieval, achieving +5% Recall@100 over text-only baselines on large-scale data.]]></summary></entry><entry><title type="html">Multi-Channel Retrieval Fusion: From Heuristic Weights to Unified Ranking</title><link href="http://localhost:4001/blog/2025/05/02/unified-ltr-multi-channel-retrieval/" rel="alternate" type="text/html" title="Multi-Channel Retrieval Fusion: From Heuristic Weights to Unified Ranking" /><published>2025-05-02T00:00:00-05:00</published><updated>2025-05-02T00:00:00-05:00</updated><id>http://localhost:4001/blog/2025/05/02/unified-ltr-multi-channel-retrieval</id><content type="html" xml:base="http://localhost:4001/blog/2025/05/02/unified-ltr-multi-channel-retrieval/"><![CDATA[<div class="lang-block" data-lang="zh">
+
+  <blockquote>
+    <p>本文是对论文 <a href="https://arxiv.org/abs/2602.23530">Unified Learning-to-Rank for Multi-Channel Retrieval in Large-Scale E-Commerce Search</a>（arXiv 2602.23530）的解读。该论文来自 Target.com 搜索团队，已部署于生产环境，在线 A/B 实验中用户转化率提升 <strong>+2.85%</strong>。</p>
+  </blockquote>
+
+  <hr />
+
+  <h2 id="section">背景：电商搜索为什么需要多通道检索？</h2>
+
+  <p>大规模电商搜索面临一个根本矛盾：商品库有数百万 SKU，但每次查询必须在极低延迟下返回结果。单一检索通道无法同时满足所有需求——</p>
+
+  <ul>
+    <li><strong>词法匹配通道</strong>（BM25 类）：精确匹配关键词，但召回率有限</li>
+    <li><strong>语义检索通道</strong>（向量检索）：理解语义，但可能漏掉精确匹配</li>
+    <li><strong>热销/新品/季节性通道</strong>：满足业务目标，但与相关性无直接关联</li>
+  </ul>
+
+  <p>因此，现代电商搜索系统普遍采用<strong>多通道检索</strong>：每个通道独立召回 top-$n_k$ 个候选，最终合并成一个候选池，再交给排序模型处理。</p>
+
+\[\mathcal{R}(q) = \bigcup_{k=1}^{K} \mathcal{R}_k^{(n_k)}(q)\]
+
+  <p><strong>问题来了：如何把来自不同通道、分布完全不同的候选合并成一个最优排序？</strong></p>
+
+  <hr />
+
+  <h2 id="section-1">现有方法的局限</h2>
+
+  <h3 id="reciprocal-rank-fusionrrf">Reciprocal Rank Fusion（RRF）</h3>
+
+  <p>RRF 是最常见的无监督融合方法，每个候选的得分由其在各通道中的排名倒数求和：</p>
+
+\[\text{score}_\text{RRF}(i) = \sum_{k=1}^{K} \frac{1}{r_k(i) + c}\]
+
+  <p>其中 $r_k(i)$ 是候选 $i$ 在通道 $k$ 中的排名，$c$ 是平滑常数（通常取 60）。</p>
+
+  <p><strong>缺陷</strong>：权重固定，不感知 query。同一个通道对不同 query 的贡献差异极大，但 RRF 无法区分。</p>
+
+  <h3 id="weighted-interleavingwi">Weighted Interleaving（WI）</h3>
+
+  <p>WI 按预设的通道权重概率性地交叉采样各通道的结果。比 RRF 灵活一点，但权重仍然是全局固定的，无法根据 query 动态调整，也无法建模通道间的交互。</p>
+
+  <p><strong>核心问题</strong>：这两种方法都把通道当作独立的黑盒，忽略了：</p>
+  <ol>
+    <li>不同 query 对不同通道的依赖程度不同</li>
+    <li>通道之间存在候选重叠和互补关系</li>
+    <li>业务目标（转化率）与排名位置之间的复杂关系</li>
+  </ol>
+
+  <hr />
+
+  <h2 id="unified-ranking">论文方案：统一排序模型（Unified Ranking）</h2>
+
+  <h3 id="section-2">核心思路</h3>
+
+  <p>把多通道融合重新定义为一个<strong>有监督的 Learning-to-Rank 问题</strong>：</p>
+
+  <blockquote>
+    <p>不再给通道分配固定权重，而是把通道信息作为特征，训练一个统一的排序函数 $f(q, i; \theta)$，直接优化业务目标。</p>
+  </blockquote>
+
+  <p>模型选择 <strong>GBDT（梯度提升决策树）</strong>，原因是：在有大量结构化特征的工业场景下，GBDT 在延迟和效果上仍然与深度模型持平甚至更优，且推理速度快，满足 p95 &lt; 50ms 的生产要求。</p>
+
+  <hr />
+
+  <h2 id="section-3">三个关键设计</h2>
+
+  <h3 id="queryitemweek-">1. 数据表示：query–item–week 三元组</h3>
+
+  <p>训练样本以<strong>周</strong>为粒度聚合，而不是单次 session。周级聚合平衡了时效性与统计稳定性，同时能捕捉季节性和趋势变化。模型同时使用长期（历史销量）和短期（近期点击速度）特征，平衡稳定商品和新兴趋势商品。</p>
+
+  <h3 id="section-4">2. 标签构造：转化加权的参与度标签</h3>
+
+  <p>用户行为存在一个转化漏斗：曝光 → 点击 → 加购 → 购买。论文定义了一个加权标签：</p>
+
+\[L(q, i, w) = a \cdot P_{q,i,w} + b \cdot A_{q,i,w} + c \cdot C_{q,i,w}\]
+
+  <p>权重按语料库级别的转化率自动校准：</p>
+
+\[a = 1, \quad b = \frac{|\mathcal{P}|}{|\mathcal{A}|}, \quad c = \frac{|\mathcal{P}|}{|\mathcal{C}|}\]
+
+  <p><strong>购买的权重最高，点击的权重最低</strong>，直接对齐业务目标。最后做 per-query max 归一化，把标签映射到 $[0, 4]$。</p>
+
+  <h3 id="section-5">3. 特征工程：三类特征</h3>
+
+  <table>
+    <thead>
+      <tr>
+        <th>特征类别</th>
+        <th>内容</th>
+        <th>作用</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>商品特征</strong></td>
+        <td>价格、类目、多时间窗口销量</td>
+        <td>建模商品长期受欢迎程度</td>
+      </tr>
+      <tr>
+        <td><strong>通道感知的 query-item 特征</strong></td>
+        <td>每个通道的检索得分</td>
+        <td>让模型学习 query 对各通道的依赖</td>
+      </tr>
+      <tr>
+        <td><strong>用户参与度特征</strong></td>
+        <td>点击、加购、购买的短期加权聚合</td>
+        <td>捕捉短期用户意图变化</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p><strong>通道感知特征</strong>是核心创新：把所有通道的检索得分都作为特征输入，让模型自己学习在不同 query 下应该信任哪个通道。</p>
+
+  <hr />
+
+  <h2 id="section-6">实验结果</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th>模型变体</th>
+        <th>NDCG@8</th>
+        <th>CTR 提升</th>
+        <th>加购提升</th>
+        <th>转化提升</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>WI（基线）</td>
+        <td>0.6620</td>
+        <td>—</td>
+        <td>—</td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td>UR</td>
+        <td>0.7169</td>
+        <td>+0.26%</td>
+        <td>+1.21%*</td>
+        <td>+1.28%*</td>
+      </tr>
+      <tr>
+        <td>UR + 参与度特征</td>
+        <td>0.7799</td>
+        <td>+1.52%*</td>
+        <td>+2.72%*</td>
+        <td>+2.38%*</td>
+      </tr>
+      <tr>
+        <td>UR + 参与度特征 + 转化标签</td>
+        <td>0.7994</td>
+        <td>+1.46%*</td>
+        <td>+2.81%*</td>
+        <td><strong>+2.85%</strong>*</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>*表示 95% 置信水平下统计显著。</p>
+
+  <p>三个关键结论：</p>
+  <ol>
+    <li><strong>统一排序 vs. 加权交叉</strong>：仅把融合问题换成有监督 LTR，转化率就提升 +1.28%，说明通道间交互信息有价值</li>
+    <li><strong>参与度特征贡献最大</strong>：短期用户行为信号比商品长期历史销量更能预测当前搜索的转化意图</li>
+    <li><strong>转化加权标签</strong>：让模型更关注购买行为而不是点击行为，进一步提升 +0.47%</li>
+  </ol>
+
+  <hr />
+
+  <h2 id="section-7">总结</h2>
+
+  <p>这篇论文的核心贡献：<strong>把多通道融合从”给通道分配固定权重”变成”让模型学习 query 对通道的依赖”</strong>。技术上没有特别复杂的创新，但正确的问题定义 + 正确的特征工程，在真实生产环境中取得了显著的业务提升。</p>
+
+  <blockquote>
+    <p><strong>论文链接</strong>：<a href="https://arxiv.org/abs/2602.23530">arXiv:2602.23530</a></p>
+  </blockquote>
+
+</div>
+
+<div class="lang-block" data-lang="en">
+
+  <blockquote>
+    <p>This post is a reading note on <a href="https://arxiv.org/abs/2602.23530">Unified Learning-to-Rank for Multi-Channel Retrieval in Large-Scale E-Commerce Search</a> (arXiv 2602.23530), from the Target.com search team. The system is deployed in production and achieved a <strong>+2.85% improvement in user conversion</strong> in online A/B experiments.</p>
+  </blockquote>
+
+  <hr />
+
+  <h2 id="background-why-multi-channel-retrieval">Background: Why Multi-Channel Retrieval?</h2>
+
+  <p>Large-scale e-commerce search faces a fundamental tension: the catalog contains millions of SKUs, yet every query must return results under strict latency budgets. No single retrieval channel can satisfy all needs simultaneously:</p>
+
+  <ul>
+    <li><strong>Lexical matching</strong> (BM25-style): precise keyword matching, but limited recall</li>
+    <li><strong>Semantic retrieval</strong> (dense vectors): understands intent, but may miss exact matches</li>
+    <li><strong>Popularity / freshness / seasonal channels</strong>: serve business objectives, but not directly tied to relevance</li>
+  </ul>
+
+  <p>Modern systems therefore use <strong>multi-channel retrieval</strong>: each channel independently retrieves its top-$n_k$ candidates, which are merged into a single candidate pool for re-ranking:</p>
+
+\[\mathcal{R}(q) = \bigcup_{k=1}^{K} \mathcal{R}_k^{(n_k)}(q)\]
+
+  <p><strong>The challenge: how do you merge candidates from heterogeneous channels with completely different score distributions into a single optimal ranking?</strong></p>
+
+  <hr />
+
+  <h2 id="limitations-of-existing-methods">Limitations of Existing Methods</h2>
+
+  <h3 id="reciprocal-rank-fusion-rrf">Reciprocal Rank Fusion (RRF)</h3>
+
+  <p>RRF is the most common unsupervised fusion method. Each candidate’s score is the sum of reciprocal ranks across channels:</p>
+
+\[\text{score}_\text{RRF}(i) = \sum_{k=1}^{K} \frac{1}{r_k(i) + c}\]
+
+  <p><strong>Limitation</strong>: fixed global weights, query-agnostic. The same channel may be highly relevant for some queries and irrelevant for others — RRF cannot distinguish.</p>
+
+  <h3 id="weighted-interleaving-wi">Weighted Interleaving (WI)</h3>
+
+  <p>WI probabilistically samples from channels according to predefined weights. Slightly more flexible than RRF, but weights are still globally fixed and cannot model cross-channel interactions.</p>
+
+  <p><strong>Core problem</strong>: both methods treat channels as independent black boxes, ignoring:</p>
+  <ol>
+    <li>Different queries depend on different channels to different degrees</li>
+    <li>Candidates overlap and complement each other across channels</li>
+    <li>The complex relationship between ranking position and business KPIs like conversion</li>
+  </ol>
+
+  <hr />
+
+  <h2 id="proposed-approach-unified-ranking-model">Proposed Approach: Unified Ranking Model</h2>
+
+  <h3 id="core-idea">Core Idea</h3>
+
+  <p>Reformulate multi-channel fusion as a <strong>supervised learning-to-rank problem</strong>:</p>
+
+  <blockquote>
+    <p>Instead of assigning fixed weights to channels, treat channel information as features and train a unified scoring function $f(q, i; \theta)$ that directly optimizes business objectives.</p>
+  </blockquote>
+
+  <p>The model uses <strong>GBDT (Gradient Boosted Decision Trees)</strong> because in industrial settings with large structured feature sets, GBDT remains competitive with deep neural models under realistic latency constraints, and its inference speed satisfies the p95 &lt; 50ms production requirement.</p>
+
+  <hr />
+
+  <h2 id="three-key-design-choices">Three Key Design Choices</h2>
+
+  <h3 id="data-representation-queryitemweek-triples">1. Data Representation: Query–Item–Week Triples</h3>
+
+  <p>Training instances are aggregated at <strong>weekly granularity</strong> rather than per-session. Weekly aggregation balances temporal responsiveness and statistical stability, and captures seasonality and trend shifts. The model uses both long-term (historical sales) and short-term (recent click velocity) features to balance established products with newly trending items.</p>
+
+  <h3 id="label-construction-conversion-weighted-engagement-label">2. Label Construction: Conversion-Weighted Engagement Label</h3>
+
+  <p>User behavior follows a conversion funnel: impression → click → add-to-cart → purchase. The paper defines a weighted label:</p>
+
+\[L(q, i, w) = a \cdot P_{q,i,w} + b \cdot A_{q,i,w} + c \cdot C_{q,i,w}\]
+
+  <p>Weights are calibrated using corpus-level conversion statistics:</p>
+
+\[a = 1, \quad b = \frac{|\mathcal{P}|}{|\mathcal{A}|}, \quad c = \frac{|\mathcal{P}|}{|\mathcal{C}|}\]
+
+  <p><strong>Purchases receive the highest weight, clicks the lowest</strong>, directly aligning training with business objectives. Labels are then per-query max-normalized to $[0, 4]$.</p>
+
+  <h3 id="feature-engineering-three-feature-groups">3. Feature Engineering: Three Feature Groups</h3>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Feature Group</th>
+        <th>Content</th>
+        <th>Purpose</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Item features</strong></td>
+        <td>Price, category, multi-window sales</td>
+        <td>Model long-term item popularity</td>
+      </tr>
+      <tr>
+        <td><strong>Channel-aware query–item features</strong></td>
+        <td>Retrieval scores from all channels</td>
+        <td>Learn query-dependent channel utility</td>
+      </tr>
+      <tr>
+        <td><strong>User engagement features</strong></td>
+        <td>Short-term weighted clicks/ATC/purchases</td>
+        <td>Capture short-term intent shifts</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p><strong>Channel-aware features</strong> are the core innovation: all channel retrieval scores are fed as features, letting the model learn which channel to trust for each query. Missing channel scores are treated as NA — GBDT handles sparse features natively.</p>
+
+  <hr />
+
+  <h2 id="results">Results</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Model Variant</th>
+        <th>NDCG@8</th>
+        <th>CTR Lift</th>
+        <th>ATC Lift</th>
+        <th>Conversion Lift</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>WI (Baseline)</td>
+        <td>0.6620</td>
+        <td>—</td>
+        <td>—</td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td>UR</td>
+        <td>0.7169</td>
+        <td>+0.26%</td>
+        <td>+1.21%*</td>
+        <td>+1.28%*</td>
+      </tr>
+      <tr>
+        <td>UR + Engagement Features</td>
+        <td>0.7799</td>
+        <td>+1.52%*</td>
+        <td>+2.72%*</td>
+        <td>+2.38%*</td>
+      </tr>
+      <tr>
+        <td>UR + EF + Conversion Label</td>
+        <td>0.7994</td>
+        <td>+1.46%*</td>
+        <td>+2.81%*</td>
+        <td><strong>+2.85%</strong>*</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>*Statistically significant at 95% confidence level.</p>
+
+  <p>Three key takeaways:</p>
+  <ol>
+    <li><strong>Unified ranking vs. weighted interleaving</strong>: simply replacing heuristic fusion with supervised LTR yields +1.28% conversion, confirming that cross-channel interaction signals are valuable</li>
+    <li><strong>Engagement features have the largest impact</strong>: short-term user behavior signals are more predictive of current-session conversion intent than long-term item history</li>
+    <li><strong>Conversion-weighted labels</strong>: orienting the model toward purchase behavior rather than clicks adds a further +0.47% conversion lift</li>
+  </ol>
+
+  <hr />
+
+  <h2 id="takeaways">Takeaways</h2>
+
+  <p>The core contribution of this paper: <strong>shifting multi-channel fusion from “assign fixed weights to channels” to “let the model learn query-dependent channel utility”</strong>. There is no particularly novel algorithm — the value lies in the correct problem formulation and the right feature engineering, which together produce significant business impact in a real production environment.</p>
+
+  <blockquote>
+    <p><strong>Paper link</strong>: <a href="https://arxiv.org/abs/2602.23530">arXiv:2602.23530</a></p>
+  </blockquote>
+
+</div>]]></content><author><name>Guangyue Xu</name></author><category term="Search" /><category term="Learning-to-Rank" /><category term="E-Commerce" /><category term="Recommendation" /><summary type="html"><![CDATA[E-commerce search pulls candidates from text, semantic, and behavioral channels — then merges them with hand-tuned weights. We replace that with a unified LTR model trained end-to-end, deployed at Target.com with +2.85% conversion lift in A/B testing.]]></summary></entry></feed>

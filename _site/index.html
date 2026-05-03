@@ -1,0 +1,437 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <title>Dr. Guangyue Xu</title>
+  <meta name="author" content="Guangyue Xu">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" type="text/css" href="stylesheet.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌐</text></svg>">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <style>
+    :root {
+      --charcoal:  #1c1c1e;
+      --charcoal2: #2c2c2e;
+      --charcoal3: #3a3a3c;
+      --accent:    #2d6a4f;
+      --accent-light: #40916c;
+      --text:      #1c1c1e;
+      --muted:     #6e6e73;
+      --border:    #e5e5ea;
+      --bg:        #fafaf8;
+      --bg-soft:   #f2f2f0;
+      --tag-bg:    #f0f4f2;
+      --tag-border:#b7d5c8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--text); background: var(--bg); line-height: 1.6; }
+
+    /* ── Top bar ── */
+    .topbar {
+      width: 100%; background: var(--charcoal);
+      border-bottom: 1px solid var(--charcoal2);
+    }
+    .topbar-inner {
+      max-width: 860px; margin: 0 auto;
+      padding: 0 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 52px;
+    }
+    .topbar-icons a {
+      color: #8e8e93; font-size: 17px; margin-right: 16px;
+      text-decoration: none; transition: color 0.2s;
+    }
+    .topbar-icons a:hover { color: #fff; }
+    .topbar-nav { display: flex; align-items: center; gap: 4px; }
+    .topbar-nav a {
+      color: #8e8e93; font-size: 14px; font-weight: 500;
+      padding: 6px 14px; border-radius: 6px;
+      text-decoration: none; transition: all 0.2s;
+    }
+    .topbar-nav a:hover { color: #fff; background: var(--charcoal3); }
+    .topbar-nav a.active { color: #fff; background: var(--charcoal3); }
+    .topbar-nav a.blog-btn {
+      color: #fff; background: var(--accent);
+      border-radius: 6px; font-weight: 600;
+    }
+    .topbar-nav a.blog-btn:hover { background: var(--accent-light); }
+
+    /* ── Layout ── */
+    .main { max-width: 860px; margin: 0 auto; padding: 48px 24px 64px; }
+
+    /* ── Bio ── */
+    .bio-section { margin-bottom: 52px; }
+    .bio-section h1 {
+      font-size: 2rem; font-weight: 700; color: var(--navy);
+      margin-bottom: 6px; letter-spacing: -0.5px;
+    }
+    .bio-section h1 span { font-weight: 400; font-size: 1.3rem; color: var(--muted); margin-left: 8px; }
+    .bio-section p { font-size: 15px; color: var(--text); margin-top: 16px; max-width: 720px; }
+    .bio-links { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 10px; }
+    .bio-links a {
+      display: inline-flex; align-items: center; gap: 6px;
+      color: var(--accent); font-size: 13.5px; font-weight: 500;
+      border: 1px solid var(--tag-border); background: var(--tag-bg);
+      padding: 5px 14px; border-radius: 6px; text-decoration: none;
+      transition: all 0.2s;
+    }
+    .bio-links a:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    /* ── Section heading ── */
+    .section-heading {
+      font-size: 0.72rem; font-weight: 800; color: var(--charcoal);
+      text-transform: uppercase; letter-spacing: 0.14em;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid var(--charcoal);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .section-wrap { margin-bottom: 52px; }
+
+    /* ── News ── */
+    .news-list { display: flex; flex-direction: column; gap: 0; }
+    .news-item {
+      display: flex; gap: 20px; align-items: baseline;
+      padding: 10px 0; border-bottom: 1px solid var(--border);
+      font-size: 14px;
+    }
+    .news-item:last-child { border-bottom: none; }
+    .news-date {
+      min-width: 90px; color: var(--muted); font-size: 13px;
+      font-variant-numeric: tabular-nums; white-space: nowrap;
+    }
+    .news-text { color: var(--text); line-height: 1.6; }
+    .news-text a { color: var(--accent); text-decoration: none; }
+    .news-text a:hover { text-decoration: underline; }
+    .news-badge {
+      display: inline-block; font-size: 11px; font-weight: 600;
+      padding: 1px 7px; border-radius: 4px; margin-right: 6px;
+      vertical-align: middle;
+    }
+    .badge-paper { background: #dbeafe; color: #1e40af; }
+    .badge-blog  { background: #dcfce7; color: #166534; }
+    .badge-talk  { background: #fef9c3; color: #854d0e; }
+
+    /* ── Blog teaser ── */
+    .blog-teaser {
+      background: var(--navy);
+      border-radius: 10px;
+      padding: 24px 28px;
+      margin-bottom: 52px;
+      display: flex; align-items: center; justify-content: space-between; gap: 24px;
+    }
+    .blog-teaser-text h2 { color: #fff; font-size: 1.05rem; font-weight: 700; margin-bottom: 4px; }
+    .blog-teaser-text p  { color: #94a3b8; font-size: 13.5px; }
+    .blog-teaser a.btn {
+      background: var(--accent); color: #fff;
+      padding: 9px 22px; border-radius: 6px;
+      text-decoration: none; font-weight: 600; font-size: 14px;
+      white-space: nowrap; transition: background 0.2s;
+    }
+    .blog-teaser a.btn:hover { background: var(--accent-light); }
+
+    /* ── Publications ── */
+    .pub-list { display: flex; flex-direction: column; gap: 28px; }
+    .pub-card {
+      display: flex; gap: 20px; align-items: flex-start;
+      padding: 20px; border: 1px solid var(--border);
+      border-radius: 10px; background: var(--bg);
+      transition: box-shadow 0.2s, border-color 0.2s;
+    }
+    .pub-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.07); border-color: #bfdbfe; }
+    .pub-card img {
+      width: 148px; min-width: 148px; height: 110px;
+      object-fit: contain; object-position: center;
+      border-radius: 6px; border: 1px solid var(--border);
+      background: #f8f8f6;
+    }
+    .pub-img-placeholder {
+      width: 148px; min-width: 148px; height: 96px;
+      background: var(--bg-soft); border-radius: 6px;
+      border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--accent); font-size: 26px;
+    }
+    .pub-info { flex: 1; }
+    .pub-title-row { display: block; margin-bottom: 6px; }
+    .pub-title {
+      font-size: 14.5px; font-weight: 600; color: var(--accent);
+      text-decoration: none; line-height: 1.4;
+    }
+    .pub-title:hover { text-decoration: underline; }
+    .pub-badge {
+      display: inline-block; font-size: 11px; font-weight: 600;
+      padding: 1px 8px; border-radius: 4px; white-space: nowrap;
+      margin-left: 8px; vertical-align: middle; position: relative; top: -1px;
+    }
+    .badge-new    { background: #dcfce7; color: #166534; }
+    .badge-first  { background: #dbeafe; color: #1e40af; }
+    .pub-authors  { font-size: 13.5px; color: var(--text); margin-bottom: 2px; }
+    .pub-venue    { font-size: 13px; color: var(--muted); font-style: italic; margin-bottom: 8px; }
+    .pub-links    { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+    .pub-links a {
+      font-size: 12.5px; color: var(--accent);
+      border: 1px solid var(--tag-border); background: var(--tag-bg);
+      padding: 2px 10px; border-radius: 4px; text-decoration: none;
+      transition: all 0.2s;
+    }
+    .pub-links a:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .pub-desc { font-size: 13.5px; color: var(--muted); line-height: 1.6; }
+
+    /* ── Service ── */
+    .service-list { font-size: 14px; color: var(--text); line-height: 1.9; }
+
+    /* ── Posts preview ── */
+    .post-preview-list { display: flex; flex-direction: column; gap: 0; margin-bottom: 14px; }
+    .post-preview-item {
+      display: block; text-decoration: none; color: inherit;
+      padding: 18px 0; border-bottom: 1px solid var(--border);
+      transition: background 0.15s;
+    }
+    .post-preview-item:last-child { border-bottom: none; }
+    .post-preview-item:hover .post-preview-title { color: var(--accent); }
+    .post-preview-title { font-size: 15px; font-weight: 650; color: var(--charcoal); margin-bottom: 5px; line-height: 1.4; }
+    .post-preview-meta { font-size: 12.5px; color: var(--muted); margin-bottom: 7px; }
+    .tag-sm {
+      display: inline-block; background: var(--tag-bg); color: var(--accent);
+      border: 1px solid var(--tag-border); border-radius: 3px;
+      padding: 0 7px; font-size: 11.5px; font-weight: 500; margin-left: 2px;
+    }
+    .post-preview-desc { font-size: 13.5px; color: #4a4a4f; line-height: 1.6; }
+    .all-posts-link { font-size: 13.5px; color: var(--accent); font-weight: 500; text-decoration: none; }
+    .all-posts-link:hover { text-decoration: underline; }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center; font-size: 12px; color: #cbd5e1;
+      padding: 24px; background: var(--navy);
+    }
+    footer a { color: #94a3b8; text-decoration: none; }
+    footer a:hover { color: #fff; }
+
+    @media (max-width: 600px) {
+      .pub-card { flex-direction: column; }
+      .pub-card img, .pub-img-placeholder { width: 100%; min-width: unset; height: 160px; }
+      .blog-teaser { flex-direction: column; }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- ── Top navigation ── -->
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="topbar-icons">
+        <a href="mailto:xugy07@gmail.com" title="Email"><i class="fas fa-envelope"></i></a>
+        <a href="https://scholar.google.com/citations?hl=en&user=BVbyVlEAAAAJ" title="Google Scholar"><i class="fas fa-graduation-cap"></i></a>
+        <a href="https://github.com/xugy07-code" title="GitHub"><i class="fab fa-github"></i></a>
+        <a href="https://www.linkedin.com/in/guangyue-xu" title="LinkedIn"><i class="fab fa-linkedin"></i></a>
+      </div>
+      <nav class="topbar-nav">
+        <a href="index.html" class="active">About</a>
+        <a href="blog/index.html" class="blog-btn">Blog</a>
+        <a href="">CV</a>
+      </nav>
+    </div>
+  </div>
+
+  <div class="main">
+
+    <!-- ── Bio ── -->
+    <div class="bio-section">
+      <h1>Guangyue Xu</h1>
+      <p>
+        I am currently a <strong>Senior Data Scientist</strong> at
+        <a href="https://www.target.com/" style="color:var(--accent);">Search@Target</a>.
+        Previously, I pursued a Ph.D. at
+        <a href="https://www.cse.msu.edu/" style="color:var(--accent);">Michigan State University</a>,
+        where I focused on Machine Learning (ML) and Natural Language Processing (NLP).
+        My research centers on pre-training large vision-language models and enhancing their
+        generalization capabilities, with applications in e-commerce search.
+      </p>
+      <p style="margin-top:10px;">
+        I received my B.E. in Software Engineering from Jilin University
+        and M.S. in Computer Science from Tsinghua University.
+        I also interned in MSRA's Web Search and Mining Group.
+      </p>
+      <div class="bio-links">
+        <a href="mailto:xugy07@gmail.com"><i class="fas fa-envelope"></i> Email</a>
+        <a href=""><i class="fas fa-file-pdf"></i> CV</a>
+        <a href="https://scholar.google.com/citations?hl=en&user=BVbyVlEAAAAJ"><i class="fas fa-graduation-cap"></i> Google Scholar</a>
+        <a href="https://github.com/xugy07-code"><i class="fab fa-github"></i> GitHub</a>
+      </div>
+    </div>
+
+    <!-- ── News ── -->
+    <div class="section-wrap">
+      <div class="section-heading">News</div>
+      <div class="news-list">
+        <div class="news-item">
+          <span class="news-date">Mar 2026</span>
+          <span class="news-text">
+            <span class="news-badge badge-paper">Paper</span>
+            New preprint: <a href="https://arxiv.org/abs/2603.04836">Beyond Text: Aligning Vision and Language for Multimodal E-Commerce Retrieval</a> is on arXiv.
+          </span>
+        </div>
+        <div class="news-item">
+          <span class="news-date">Feb 2026</span>
+          <span class="news-text">
+            <span class="news-badge badge-paper">Paper</span>
+            New preprint: <a href="https://arxiv.org/abs/2602.23530">Unified Learning-to-Rank for Multi-Channel Retrieval in Large-Scale E-Commerce Search</a> is on arXiv.
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Posts ── -->
+    <div class="section-wrap">
+      <div class="section-heading">Posts</div>
+      <div class="post-preview-list">
+
+        <a class="post-preview-item" href="blog/2026/03/10/beyond-text-multimodal-ecommerce-retrieval.html">
+          <div class="post-preview-title">Beyond Text: How We Built Multimodal Retrieval for E-Commerce Search</div>
+          <div class="post-preview-meta">Mar 10, 2026 &nbsp;·&nbsp; <span class="tag-sm">multimodal</span> <span class="tag-sm">e-commerce</span></div>
+          <div class="post-preview-desc">Most e-commerce search systems rely purely on text — but product images carry signals that text often misses. We propose a two-stage vision-language alignment framework achieving +5% Recall@100 over text-only baselines.</div>
+        </a>
+
+        <a class="post-preview-item" href="blog/2025/05/02/unified-ltr-multi-channel-retrieval.html">
+          <div class="post-preview-title">Multi-Channel Retrieval Fusion: From Heuristic Weights to Unified Ranking</div>
+          <div class="post-preview-meta">May 2, 2025 &nbsp;·&nbsp; <span class="tag-sm">Search</span> <span class="tag-sm">Learning-to-Rank</span></div>
+          <div class="post-preview-desc">E-commerce search pulls candidates from text, semantic, and behavioral channels — then merges them with hand-tuned weights. We replace that with a unified LTR model, deployed at Target.com with +2.85% conversion lift.</div>
+        </a>
+
+      </div>
+      <a href="blog/index.html" class="all-posts-link">View all posts →</a>
+    </div>
+
+    <!-- ── Publications ── -->
+    <div class="section-wrap">
+      <div class="section-heading">Selected Publications</div>
+      <div class="pub-list">
+
+        <!-- Beyond Text 2603.04836 -->
+        <div class="pub-card">
+          <img src='images/mul-modal-retrieval.png' alt="Multimodal Retrieval">
+          <div class="pub-info">
+            <div class="pub-title-row">
+              <a class="pub-title" href="https://arxiv.org/abs/2603.04836">
+                Beyond Text: Aligning Vision and Language for Multimodal E-Commerce Retrieval
+              </a>
+              <span class="pub-badge badge-new">New</span>
+            </div>
+            <div class="pub-authors"><strong>Guangyue Xu</strong>*, Qujiaheng Zhang*, Fengjie Li &nbsp;<em style="font-size:12px;color:var(--muted);">(* co-first authors)</em></div>
+            <div class="pub-venue">arXiv preprint arXiv:2603.04836, 2026</div>
+            <div class="pub-links">
+              <a href="https://arxiv.org/abs/2603.04836">arXiv</a>
+            </div>
+            <p class="pub-desc">
+              We study unified text-image fusion for two-tower retrieval models in e-commerce, proposing a novel modality fusion network that captures cross-modal complementary information between product text and images.
+            </p>
+          </div>
+        </div>
+
+        <!-- Unified LTR 2602.23530 -->
+        <div class="pub-card">
+          <img src='images/mcr-gbdt.png' alt="Multi-Channel Retrieval">
+          <div class="pub-info">
+            <div class="pub-title-row">
+              <a class="pub-title" href="https://arxiv.org/abs/2602.23530">
+                Unified Learning-to-Rank for Multi-Channel Retrieval in Large-Scale E-Commerce Search
+              </a>
+              <span class="pub-badge badge-new">New</span>
+            </div>
+            <div class="pub-authors"><strong>Guangyue Xu</strong>*, A. Gaydhani*, D. Kamath, A. Singh, A. Li &nbsp;<em style="font-size:12px;color:var(--muted);">(* co-first authors)</em></div>
+            <div class="pub-venue">arXiv preprint arXiv:2602.23530, 2026</div>
+            <div class="pub-links">
+              <a href="https://arxiv.org/abs/2602.23530">arXiv</a>
+            </div>
+            <p class="pub-desc">
+              A unified learning-to-rank framework that jointly optimizes ranking across multiple retrieval channels in large-scale e-commerce search, improving relevance and efficiency.
+            </p>
+          </div>
+        </div>
+
+        <!-- GIPCOL WACV 2024 -->
+        <div class="pub-card">
+          <img src='images/graph_arch.jpg' alt="GIPCOL">
+          <div class="pub-info">
+            <div class="pub-title-row">
+              <a class="pub-title" href="https://arxiv.org/pdf/2311.05729.pdf">
+                GIPCOL: Graph-Injected Soft Prompting for Compositional Zero-Shot Learning
+              </a>
+            </div>
+            <div class="pub-authors"><strong>Guangyue Xu</strong>, Parisa Kordjamshid, Joyce Chai</div>
+            <div class="pub-venue">WACV, 2024</div>
+            <div class="pub-links">
+              <a href="https://github.com/HLR/GIPCOL">project page</a>
+              <a href="https://arxiv.org/pdf/2311.05729.pdf">arXiv</a>
+            </div>
+            <p class="pub-desc">We introduce a GNN into soft-prompting design to improve CLIP's compositional zero-shot learning ability.</p>
+          </div>
+        </div>
+
+        <!-- MetaReVision EMNLP 2023 -->
+        <div class="pub-card">
+          <img src='images/metarevision.jpg' alt="MetaReVision">
+          <div class="pub-info">
+            <div class="pub-title-row">
+              <a class="pub-title" href="https://arxiv.org/pdf/2311.01580.pdf">
+                MetaReVision: Meta-Learning with Retrieval for Visually Grounded Compositional Concept Acquisition
+              </a>
+            </div>
+            <div class="pub-authors"><strong>Guangyue Xu</strong>, Parisa Kordjamshid, Joyce Chai</div>
+            <div class="pub-venue">EMNLP-Findings, 2023</div>
+            <div class="pub-links">
+              <a href="https://github.com/HLR/MetaReVision">project page</a>
+              <a href="https://arxiv.org/pdf/2311.01580.pdf">arXiv</a>
+            </div>
+            <p class="pub-desc">
+              We meta-train vision-language models using retrieved items to obtain more generalizable token representations and improve compositional ability.
+            </p>
+          </div>
+        </div>
+
+        <!-- Prompting arXiv 2022 -->
+        <div class="pub-card">
+          <img src='images/three_prompts_v2.jpg' alt="Prompting">
+          <div class="pub-info">
+            <div class="pub-title-row">
+              <a class="pub-title" href="https://arxiv.org/pdf/2211.05077.pdf">
+                Prompting Large Pre-Trained Vision-Language Models for Compositional Concept Learning
+              </a>
+            </div>
+            <div class="pub-authors"><strong>Guangyue Xu</strong>, Parisa Kordjamshid, Joyce Chai</div>
+            <div class="pub-venue">arXiv, 2022</div>
+            <div class="pub-links">
+              <a href="https://arxiv.org/pdf/2211.05077.pdf">arXiv</a>
+            </div>
+            <p class="pub-desc">We systematically investigate various prompting techniques for CLIP in compositional zero-shot learning.</p>
+          </div>
+        </div>
+
+      </div>
+      <a href="https://scholar.google.com/citations?hl=en&user=BVbyVlEAAAAJ" class="all-posts-link" style="margin-top:16px;display:inline-block;">Full list on Google Scholar →</a>
+    </div>
+
+    <!-- ── Service ── -->
+    <div class="section-wrap">
+      <div class="section-heading">Service</div>
+      <div class="service-list">
+        <strong>Program Committee / Reviewer:</strong> EACL, EMNLP, ACM MM, ACL, WACV, LREC, ICLR, NeurIPS, ...
+      </div>
+    </div>
+
+    <!-- Visitor map -->
+    <table style="width:50%;border:0;margin:0 auto 40px;"><tbody><tr>
+      <script type="text/javascript" id="clustrmaps" src="//clustrmaps.com/map_v2.js?d=HYTrP6QYJH34-ggSCtQjePgBH6qfIvPZgLDi6Sg4B-o&cl=ffffff&w=a"></script>
+    </tr></tbody></table>
+
+  </div>
+
+  <footer>
+    Website template inspired by <a href="https://jonbarron.info">JonBarron</a>.
+  </footer>
+
+</body>
+</html>
